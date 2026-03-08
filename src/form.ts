@@ -6,7 +6,9 @@ import {
 	inputFont,
 	dropFont,
 	getFonts,
-	getFiles
+	getFiles,
+	getFamilyMembers,
+	randomId
 } from "./font";
 import { callTypeX, showReloadAnimation, activateExtension } from "./popup";
 import { defaultFonts } from "./recursive-fonts.js";
@@ -41,9 +43,24 @@ export async function buildForm() {
 		usedFonts.removeChild(usedFonts.firstChild);
 	}
 
-	// Inject new fonts
-	for (const font of await getFonts()) {
-		addFormElement(font, files);
+	const allFonts = await getFonts();
+	// Separate top-level fonts from grouped members
+	const topLevelFonts = allFonts.filter(f => !f.groupId);
+	const memberFonts = allFonts.filter(f => !!f.groupId);
+
+	// Inject top-level fonts
+	for (const font of topLevelFonts) {
+		await addFormElement(font, files);
+	}
+
+	// Now attach grouped members to their parent fieldsets
+	for (const member of memberFonts) {
+		const parentFieldset = usedFonts.querySelector<HTMLFieldSetElement>(
+			`fieldset[data-fontid="${member.groupId}"]`
+		);
+		if (parentFieldset) {
+			await addGroupedMemberElement(member, files, parentFieldset);
+		}
 	}
 
 	// Inject blacklist
@@ -146,6 +163,110 @@ export async function addFormElement(
 	if (font.new) {
 		el.querySelector("fieldset").classList.add("show-font-details");
 	}
+
+	// --- Family members feature ---
+	// After rendering, check for fonts sharing the same Preferred Family
+	// and show a button to add them as grouped sub-entries
+	(async () => {
+		if (!font.file) return; // local font, skip
+		const members = await getFamilyMembers(font.file);
+		const memberEntries = Object.entries(members);
+		if (memberEntries.length === 0) return;
+
+		// Only show if no members are already grouped under this font
+		const existingFonts = await getFonts();
+		const alreadyGrouped = existingFonts
+			.filter(f => f.groupId === font.id)
+			.map(f => f.file);
+		const ungrouped = memberEntries.filter(
+			([fileName]) => !alreadyGrouped.includes(fileName)
+		);
+		if (ungrouped.length === 0) return;
+
+		const files = await getFiles();
+		const familyName = files[font.file]?.preferredFamily || "this family";
+
+		// Create the "Add family members" button
+		const familyBtn = document.createElement("button");
+		familyBtn.type = "button";
+		familyBtn.className = "add-family-members-btn";
+		familyBtn.title = `Other fonts from "${familyName}" were found`;
+		familyBtn.textContent = `👨‍👩‍👧 Add family members (${ungrouped.length} found)`;
+
+		// Build panel from template
+		const panelTemplate = document.querySelector<HTMLTemplateElement>("#familyMembersPanel");
+		const panelEl = document.importNode(panelTemplate.content, true);
+		const panel = panelEl.querySelector<HTMLDivElement>(".family-members-panel");
+		panel.querySelector(".family-count").textContent = String(ungrouped.length);
+		panel.querySelector(".family-count-plural").textContent = ungrouped.length > 1 ? "s" : "";
+		panel.querySelector(".family-name").textContent = familyName;
+
+		const checkboxContainer = panel.querySelector(".family-checkboxes");
+		for (const [fileName, fontFile] of ungrouped) {
+			const label = document.createElement("label");
+			label.className = "family-member-checkbox";
+			const cb = document.createElement("input");
+			cb.type = "checkbox";
+			cb.value = fileName;
+			cb.checked = true;
+			label.append(cb, document.createTextNode(` ${fontFile.name}`));
+			checkboxContainer.append(label);
+		}
+
+		familyBtn.onclick = () => {
+			const isOpen = panel.style.display !== "none";
+			panel.style.display = isOpen ? "none" : "block";
+		};
+
+		panel.querySelector(".family-cancel-btn").addEventListener("click", () => {
+			panel.style.display = "none";
+		});
+
+		panel.querySelector(".family-confirm-btn").addEventListener("click", async () => {
+			const checked = Array.from(
+				panel.querySelectorAll<HTMLInputElement>(".family-member-checkbox input:checked")
+			).map(cb => cb.value);
+
+			if (checked.length === 0) {
+				panel.style.display = "none";
+				return;
+			}
+
+			let fonts = await getFonts();
+			let files = await getFiles();
+
+			for (const memberFileName of checked) {
+				const memberFile = files[memberFileName];
+				if (!memberFile) continue;
+				const memberFont = Font.fromObject({
+					name: memberFile.name,
+					new: false,
+					id: randomId(),
+					file: memberFileName,
+					location: memberFile.defaultLocation || {},
+					inherit: font.inherit,
+					fallback: font.fallback,
+					selectors: [...font.selectors], // Share parent's selectors
+					css: font.css,
+					groupId: font.id // Link to parent font
+				});
+				fonts.push(memberFont);
+				// Add visually into the group container
+				await addGroupedMemberElement(memberFont, files, parentEl);
+			}
+
+			await chrome.storage.local.set({ fonts });
+
+			// Remove button and panel now that members are added
+			familyBtn.remove();
+			panel.remove();
+		});
+
+		// Insert button + panel into the font header area
+		const fontTitle = parentEl.querySelector(".font-title");
+		fontTitle.after(familyBtn, panel);
+	})();
+	// --- End family members feature ---
 
 	await addVariableSliders(font, parentEl);
 	await addNamedInstances(font, parentEl);
@@ -482,4 +603,46 @@ async function updateFont(font: Font) {
 	let fontId = font.id;
 	fonts = fonts.map((f: Font) => (f.id === fontId ? font : f));
 	await chrome.storage.local.set({ fonts }); // Updating storage calls typeX
+}
+
+/**
+ * Renders a family member font as a compact sub-entry grouped visually
+ * under the parent font's fieldset.
+ */
+export async function addGroupedMemberElement(
+	font: Font,
+	files: Record<string, FontFile>,
+	parentFieldset: HTMLFieldSetElement
+) {
+	// Find or create the grouped-members container inside the parent fieldset
+	let groupContainer = parentFieldset.querySelector<HTMLDivElement>(".grouped-members");
+	if (!groupContainer) {
+		groupContainer = document.createElement("div");
+		groupContainer.className = "grouped-members";
+		parentFieldset.append(groupContainer);
+	}
+
+	const memberEl = document.createElement("div");
+	memberEl.className = "grouped-member";
+	memberEl.dataset.fontid = font.id;
+
+	const fontFile = files[font.file];
+	const memberName = fontFile?.name || font.name || font.file;
+
+	memberEl.innerHTML = `
+		<span class="grouped-member-name">↳ ${memberName}</span>
+		<button type="button" class="remove-member-btn" title="Remove this family member">✕</button>
+	`;
+
+	memberEl.querySelector(".remove-member-btn").addEventListener("click", async () => {
+		let fonts = await getFonts();
+		fonts = fonts.filter(f => f.id !== font.id);
+		await chrome.storage.local.set({ fonts });
+		memberEl.remove();
+		if (groupContainer.children.length === 0) {
+			groupContainer.remove();
+		}
+	});
+
+	groupContainer.append(memberEl);
 }

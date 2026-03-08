@@ -228,6 +228,20 @@
 			</div>
 		</template>
 
+		<!-- Template: Family members confirmation panel -->
+		<template id="familyMembersPanel">
+			<div class="family-members-panel" style="display:none">
+				<p class="family-panel-title">
+					Found <span class="family-count"></span> other font<span class="family-count-plural">s</span> from the <strong class="family-name"></strong> family. Select which to activate together:
+				</p>
+				<div class="family-checkboxes"></div>
+				<div class="family-panel-actions">
+					<button type="button" class="family-confirm-btn">Activate selected</button>
+					<button type="button" class="family-cancel-btn">Cancel</button>
+				</div>
+			</div>
+		</template>
+
 		<script src="popup.js"></script>
 	</body>
 </html>

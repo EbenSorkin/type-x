@@ -100,7 +100,15 @@ async function generateFontStyleSheets() {
 	let fonts = await getFonts();
 	stylesheets = [];
 
+	// Only emit one CSS rule per font/group — grouped members share the
+	// parent's selectors and use the shared family name for the font stack.
 	for (const font of fonts) {
+		// Skip grouped members — their parent's rule already covers them
+		if (font.groupId) continue;
+
+		// If this font has grouped members, use a shared family name so the
+		// browser can pick the right weight/style automatically across the group.
+		// The shared name is based on the parent font's name.
 		let fontName = font.name;
 		let stylesheet = "";
 		let selectors = font.cssSelectorString(blacklist);
@@ -121,17 +129,45 @@ async function generateFontFileStyleSheets() {
 	let fonts = await getFonts();
 	let { files } = await chrome.storage.local.get("files");
 	let stylesheets = [];
+
 	for (const font of fonts) {
-		let fontName = font.name;
-		if (font.file in files) {
-			stylesheets.push(`
+		if (!(font.file in files)) continue;
+
+		// Grouped members share the parent font's family name so the browser
+		// treats them as one family and auto-selects weight/style correctly.
+		// Top-level fonts use their own name as usual.
+		const familyName = font.groupId
+			? fonts.find(f => f.id === font.groupId)?.name ?? font.name
+			: font.name;
+
+		// Try to detect font-weight and font-style from the filename so the
+		// browser can match them to CSS font-weight/style requests automatically.
+		const fileName = font.file.toLowerCase();
+		let fontWeight = "100 900"; // default: full variable range
+		let fontStyle = "normal";
+
+		// Weight hints from filename
+		if (/thin|hairline/.test(fileName))         fontWeight = "100";
+		else if (/extralight|ultralight/.test(fileName)) fontWeight = "200";
+		else if (/light/.test(fileName))            fontWeight = "300";
+		else if (/semibold|demibold/.test(fileName)) fontWeight = "600";
+		else if (/extrabold|ultrabold/.test(fileName)) fontWeight = "800";
+		else if (/black|heavy/.test(fileName))      fontWeight = "900";
+		else if (/bold/.test(fileName))             fontWeight = "700";
+		else if (/medium/.test(fileName))           fontWeight = "500";
+		else if (/regular|roman/.test(fileName))    fontWeight = "400";
+
+		// Style hints from filename
+		if (/italic|oblique/.test(fileName)) fontStyle = "italic";
+
+		stylesheets.push(`
                             @font-face {
-                                font-family: '${fontName}';
+                                font-family: '${familyName}';
                                 src: url('${files[font.file].file}');
-                                font-weight: 100 900;
+                                font-weight: ${fontWeight};
+                                font-style: ${fontStyle};
                                 font-stretch: 50% 200%;
                             }`);
-		}
 	}
 	return stylesheets;
 }

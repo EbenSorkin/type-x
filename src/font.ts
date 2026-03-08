@@ -4,6 +4,8 @@ import type { Font as FontkitFont } from "fontkit";
 const randomId = () =>
 	window.crypto.getRandomValues(new Uint32Array(2)).join("");
 
+export { randomId };
+
 export interface Axis {
 	id: string;
 	name: string;
@@ -23,6 +25,7 @@ export interface IFont {
 	inherit: boolean;
 	location: Location;
 	new: boolean;
+	groupId?: string; // Links family members together
 }
 
 export class Font {
@@ -35,6 +38,7 @@ export class Font {
 	inherit: boolean;
 	location: Location;
 	new: boolean;
+	groupId?: string; // Links family members together
 
 	constructor(
 		id: string,
@@ -45,7 +49,8 @@ export class Font {
 		css: string,
 		inherit: boolean,
 		location: Location,
-		isNew: boolean
+		isNew: boolean,
+		groupId?: string
 	) {
 		this.id = id;
 		this.name = name;
@@ -56,6 +61,7 @@ export class Font {
 		this.inherit = inherit;
 		this.location = location;
 		this.new = isNew;
+		this.groupId = groupId;
 	}
 	static fromObject(obj: any): Font {
 		return new Font(
@@ -67,7 +73,8 @@ export class Font {
 			obj.css,
 			obj.inherit,
 			obj.location || {},
-			obj.new
+			obj.new,
+			obj.groupId
 		);
 	}
 
@@ -168,21 +175,25 @@ export class FontFile {
 	axes: Record<string, Axis>;
 	instances: Record<string, Location>;
 	handle: FileSystemFileHandle;
+	preferredFamily: string | null;
 
 	constructor(
 		file: string,
 		name: string,
 		axes: Record<string, Axis>,
-		instances: Record<string, Location>
+		instances: Record<string, Location>,
+		preferredFamily: string | null = null
 	) {
 		this.file = file;
 		this.name = name;
 		this.axes = axes;
 		this.instances = instances;
 		this.handle = null;
+		this.preferredFamily = preferredFamily;
 	}
 	static fromObject(obj: any): FontFile {
-		return new FontFile(obj.file, obj.name, obj.axes, obj.instances);
+		const ff = new FontFile(obj.file, obj.name, obj.axes, obj.instances, obj.preferredFamily || null);
+		return ff;
 	}
 
 	loadVariableInfo(buffer: ArrayBuffer) {
@@ -205,6 +216,22 @@ export class FontFile {
 				}
 			} catch (e) {
 				console.warn("Failure to load variation axes:", e);
+			}
+			// Extract Preferred Family name (name ID 16) for family grouping
+			try {
+				// @ts-ignore
+				const nameTable = fontkitFont.name?.records;
+				// Name ID 16 = Preferred Family (Typographic Family)
+				// Fall back to name ID 1 (Family Name) if 16 is not present
+				const preferred = nameTable?.[16] || nameTable?.[1];
+				if (preferred) {
+					// Name records are keyed by language; prefer English
+					const langKeys = Object.keys(preferred);
+					const engKey = langKeys.find(k => k.startsWith("en")) || langKeys[0];
+					this.preferredFamily = engKey ? preferred[engKey] : null;
+				}
+			} catch (e) {
+				console.warn("Failure to load preferred family name:", e);
 			}
 		} catch (error) {
 			console.error("Error parsing font:", error);
@@ -322,4 +349,26 @@ export async function getFiles(): Promise<Record<string, FontFile>> {
 	return Object.fromEntries(
 		Object.entries(fileObjects).map(([k, v]) => [k, FontFile.fromObject(v)])
 	);
+}
+
+/**
+ * Given a font filename, find all other loaded font files that share the same
+ * Preferred Family name (name ID 16). Returns a map of filename → FontFile
+ * for matches, excluding the source file itself.
+ */
+export async function getFamilyMembers(
+	sourceFileName: string
+): Promise<Record<string, FontFile>> {
+	const files = await getFiles();
+	const source = files[sourceFileName];
+	if (!source?.preferredFamily) return {};
+
+	const family = source.preferredFamily;
+	const members: Record<string, FontFile> = {};
+	for (const [fileName, fontFile] of Object.entries(files)) {
+		if (fileName !== sourceFileName && fontFile.preferredFamily === family) {
+			members[fileName] = fontFile;
+		}
+	}
+	return members;
 }

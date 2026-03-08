@@ -669,3 +669,173 @@ footer button:hover {
 footer a:first-of-type {
 	margin-right: auto;
 }
+
+/* ─── Family Members Feature ─────────────────────────────────────────────── */
+
+/* "Add family members" button — sits below the font title bar */
+.add-family-members-btn {
+	display: flex;
+	align-items: center;
+	width: 100%;
+	padding: 0.35rem var(--spacing-unit);
+	font-size: var(--t3);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	--wght: 600;
+	color: var(--accent);
+	background: transparent;
+	border-top: 1px solid var(--separator);
+	border-bottom: 1px solid var(--separator);
+	transition: background var(--speed-1), color var(--speed-1);
+	gap: 0.4em;
+}
+
+.add-family-members-btn:hover {
+	background: var(--bg-alt);
+	color: var(--text-p1);
+}
+
+/* Confirmation panel */
+.family-members-panel {
+	background: var(--bg-alt);
+	border-bottom: 1px solid var(--separator);
+	padding: var(--spacing-unit-half) var(--spacing-unit);
+	font-size: var(--t2);
+}
+
+.family-panel-title {
+	margin: 0 0 0.5rem;
+	color: var(--text-p3);
+	line-height: 1.4;
+}
+
+.family-panel-title strong {
+	--wght: 700;
+	color: var(--text-p2);
+}
+
+/* Checkbox list of candidate family members */
+.family-checkboxes {
+	display: flex;
+	flex-direction: column;
+	gap: 0.3rem;
+	margin-bottom: 0.6rem;
+}
+
+.family-member-checkbox {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+	cursor: pointer;
+	color: var(--text-p2);
+	--wght: 400;
+	transition: color var(--speed-1);
+}
+
+.family-member-checkbox:hover {
+	color: var(--text-p1);
+}
+
+.family-member-checkbox input[type="checkbox"] {
+	width: auto;
+	margin: 0;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+
+/* Confirm / Cancel buttons row */
+.family-panel-actions {
+	display: flex;
+	gap: 0.5rem;
+}
+
+.family-confirm-btn,
+.family-cancel-btn {
+	flex: none;
+	font-size: var(--t3);
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	--wght: 600;
+	padding: 0.25rem 0.6rem;
+	border-radius: 1rem;
+	transition: background var(--speed-1), color var(--speed-1);
+}
+
+.family-confirm-btn {
+	background: var(--accent);
+	color: var(--bg-alt);
+}
+
+.family-confirm-btn:hover {
+	background: var(--text-p1);
+	color: var(--bg-alt);
+}
+
+.family-cancel-btn {
+	color: var(--text-p3);
+}
+
+.family-cancel-btn:hover {
+	color: var(--destructive);
+}
+
+/* Grouped member sub-entries */
+.grouped-members {
+	border-top: 1px solid var(--separator);
+	background: var(--bg-alt);
+}
+
+.grouped-member {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0.4rem var(--spacing-unit);
+	border-bottom: 1px solid var(--separator);
+	font-size: var(--t2);
+	color: var(--text-p3);
+	transition: background var(--speed-1);
+}
+
+.grouped-member:last-child {
+	border-bottom: none;
+}
+
+.grouped-member:hover {
+	background: var(--bg-main);
+}
+
+.grouped-member-name {
+	--mono: 0.5;
+	--wght: 400;
+	color: var(--text-p2);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.remove-member-btn {
+	flex: none;
+	font-size: var(--t3);
+	color: var(--gray-1);
+	padding: 0.1rem 0.3rem;
+	border-radius: 0.25rem;
+	margin-left: var(--spacing-unit-half);
+	transition: background var(--speed-1), color var(--speed-1);
+}
+
+.remove-member-btn:hover {
+	background: var(--destructive);
+	color: var(--text-p1);
+}
+
+@media (prefers-color-scheme: light) {
+	.family-confirm-btn {
+		color: var(--bg-main);
+	}
+	.family-confirm-btn:hover {
+		color: var(--bg-main);
+	}
+	.remove-member-btn:hover {
+		color: var(--bg-main);
+	}
+}
